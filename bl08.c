@@ -1,9 +1,12 @@
-// TODO POSIX COMPATIBLE IOCTL
-// Note page size for JB8 has been temporarily changed to 32
 /*
 File: bl08.c
 
-Copyright (C) 2004,2008  Kustaa Nyholm
+Version: 1.0.0.1
+
+Copyright (c) 2004,2008  Kustaa Nyholm
+Copyright (c) 2008 Robert Larice (SWI return to MON, QY2 chip)
+
+(update site about: forcing DTR,RTS, new cpu type, rombase, change tty default to match doc baudrate issue
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public
@@ -31,8 +34,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 // will uncover more implicit assumptions.
 //
 // cheers Kusti
-// additions ... override value for non supported CPUs
-// reset control with DTR
+
 #include <stdlib.h>
 #include <fcntl.h>
 #include <termios.h>
@@ -42,27 +44,98 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include <unistd.h>
 #include <time.h>
 #include <string.h>
+#include <signal.h>
+
+
+#if defined(__linux__)
+
+# include <sys/wait.h>
+# include <sys/ioctl.h> 
+
+#else
 
 // Terrible hack here because POSIX says 'ioctl()' is in <stropts.h> but
 // for example Mac OS X Tiger does not have this header, OTOH I think
-// that <sys/ictl.h> is not POSIX either so how do you write
+// that <sys/ioctl.h> is not POSIX either so how do you write
 // actual POSIX compliant code that compiles cleanly on POSIX...
 extern int ioctl (int filedes, int command, ...);
 // End of hack
+
+#endif
+
 	
 
  
 #define PIDFILENAME "bl08PIDfile.temp"
 
-char* COM = "/dev/tty.usbserial-FTOXM3NX";
-//char* COM = "/dev/ttyS0";
+//char* COM = "/dev/tty.usbserial-FTOXM3NX";
+char* COM = "/dev/ttyS0";
+
+typedef struct {
+char* str;
+int val;
+} pair;
+
+pair portPins[]= {
+{"LE",TIOCM_LE},
+{"DTR",TIOCM_DTR},
+{"RTS",TIOCM_RTS},
+{"ST",TIOCM_ST},
+{"SR",TIOCM_SR},
+{"CTS",TIOCM_CTS},
+{"CAR",TIOCM_CAR},
+{"CD",TIOCM_CD},
+{"RNG",TIOCM_RNG},
+{"RI",TIOCM_RI},
+{"DSR",TIOCM_DSR}
+};
+
+int forcePins[sizeof(portPins)/sizeof(portPins[0])] = {0};
+
+pair baudrates[]= {
+// Some common, but non POSIX baudrates here
+#ifdef B14400
+{"B14400",B14400},
+#endif
+#ifdef B57600
+{"B57600",B57600},
+#endif
+#ifdef B115200
+{"B115200",B115200},
+#endif
+#ifdef B230400
+{"B230400",B230400},
+#endif
+
+{"B0",B0},
+{"B50",B50},
+{"B75",B75},
+{"B110",B110},
+{"B134",B134},
+{"B150",B150},
+{"B200",B200},
+{"B300",B300},
+{"B600",B600},
+{"B1200",B1200},
+{"B1800",B1800},
+{"B2400",B2400},
+{"B4800",B4800},
+{"B9600",B9600},
+{"B19200",B19200},
+{"B38400",B38400},
+};
+	
+int baudRate=B9600;
 
 int com;
 
-char version[] = "1.0.0.0";
+char version[] = "1.0.0.1";
 
 unsigned char image[ 0x10000 ]; // HC908 memory image
 
+// EARRNG, CTRLBYT parameter
+#define ERARRNG_PAGE_ERASE 0x00
+#define ERARRNG_MASS_ERASE 0x40
 
 // give some initial meaningfull values (based on MC68HC908GZ16)
 int FLASH=0xE000; // Flash start address
@@ -73,7 +146,8 @@ int ERARRNG=0x1C06; // Erase flash routine address
 int PRGRNGE=0x1C09; // Flash programming routine address
 int FLBPR=0xFF7E;	// Flash block proctection register address
 int CPUSPEED=8; // 2 x Fbus freq, e.g.  ext osc 16 MHz -> Fbus == 4 Mh => CPUSPEED==2
-int MONDATA=0x48; // Flashing routines parameter block address
+int RAM=0x40;
+int MONDATA=0x48; // FIXME =RAM+8; // Flashing routines parameter block address
 int MONRTN = 0xFE20; // Monitor mode return jump address
 int EADDR = 0xFF7E; // For FLBPR in Flash the mass erase must use FLBPR as the erase address
 // these are calculated
@@ -106,7 +180,6 @@ int dumpSize=0;
 char* dumpFormat="hex";
 int eraseFlash=0;
 int verify=0;
-int baudRate=B14400;
 char* executeCode=NULL;
 int pageErase=0;
 int uploadOnly=0;
@@ -138,6 +211,28 @@ void flsprintf(FILE* f, char *fmt, ...) {
 	va_end(va);
 	}
 	
+void ioctlErrCheck(int e) {
+	if (e) {
+		flsprintf(stdout,"ioctl returned %d\n",e);
+		abort();
+		}
+	}
+	
+void setHandshake() {
+	int i,s;
+	ioctlErrCheck(ioctl(com, TIOCMGET, &s)); 	
+	for (i=0; i<sizeof(forcePins)/sizeof(forcePins[0]); i++) {
+		int v=forcePins[i]-1;
+		if (v==1) 
+			s &= ~portPins[i].val;
+		
+		if (v==0) 
+			s |= portPins[i].val;
+		}			
+	ioctlErrCheck(ioctl(com, TIOCMSET, &s)); 
+	}
+	
+	
 void initSerialPort() {
 	com =  open(COM, O_RDWR | O_NOCTTY | O_NDELAY);
 	if (com <0) 
@@ -168,17 +263,21 @@ void initSerialPort() {
 	cfsetispeed(&opts, baudRate);   
 	cfsetospeed(&opts, baudRate);   
 	
+	setHandshake();
+	
 	if (tcsetattr(com, TCSANOW, &opts) != 0) {
 		perror(COM); 
 		abort(); 
 		}
 		
 	tcflush(com,TCIOFLUSH); // just in case some crap is the buffers
-		
-	char buf = -2;
-	while (read(com, &buf, 1)>0) {
-		if (verbose)
-			printf("Unexpected data from serial port: %02X\n",buf & 0xFF);
+			
+	if (!terminalMode) {
+		char buf = -2;
+		while (read(com, &buf, 1)>0) {
+			if (verbose)
+				printf("Unexpected data from serial port: %02X\n",buf & 0xFF);
+			}
 		}
 
 	}
@@ -294,9 +393,9 @@ void connectTarget() {
 	for (j = 0; j<8; ++j)  
 		sendByte(0xFF);
 	flushBreak();
-	readMemory(0x40, 1 , 0);
+	readMemory(RAM, 1 , 0);
 	connected=1;
-	if ((image[ 0x40 ] & 0x40) ==0)
+	if ((image[ RAM ] & 0x40) == 0)
 		flsprintf(stdout,"Failed to unlock the security");
 	
 	// in case FLBPR is RAM based we clear it first by just writing it
@@ -367,7 +466,8 @@ int runFrom(int PC, int A, int CC, int HX) {
 int lastMon=-1;
 
 int callMonitor(int mon, int ctrlbyt, int accu, int faddr, int laddr) {
-	int SP = readSP();
+	int SP;
+
 	image[ CTRLBYT ] = ctrlbyt; // CTRLBYT BIT 6  =  1  = > mass erase
 	image[ CPUSPD ] = CPUSPEED; // CPUSPD  =  16 MHz ext clock  = > 4 MHz Fbus speed  = > 8
 	image[ LADDR ] = laddr>>8;
@@ -381,28 +481,13 @@ int callMonitor(int mon, int ctrlbyt, int accu, int faddr, int laddr) {
 
 	if (lastMon!=mon) {
 		// construct small HC908 code fragment to call the monitor function and return results
-		int i = WORKRAM+2;
+		int i = WORKRAM;
 		
 		image[ i++ ] = 0xCD; // JSR mon ; calls the monitor routine
 		image[ i++ ] = mon>>8;
 		image[ i++ ] = mon&0xFF;
-		
-		image[ i++ ] = 0x87; // PSHA ; save condition A
-		image[ i++ ] = 0x85; // TPA  ; condition codes to A
-		image[ i++ ] = 0xB7; // STA  ; store to WORKRAM
-		image[ i++ ] = WORKRAM;
-		image[ i++ ] = 0x86; // PULA ; restore A
-		image[ i++ ] = 0xB7; // STA  ; store to WORKRAM+1
-		image[ i++ ] = WORKRAM+1;
 
-		image[ i++ ] = 0x45; // LDHX #SP+1 ; restore stack pointer
-		image[ i++ ] = (SP+1) >> 8;
-		image[ i++ ] = (SP+1) & 0xFF;
-		image[ i++ ] = 0x94; // TXS 
-		
-		image[ i++ ] = 0xCC; // JMP back to MON (this is the only way)
-		image[ i++ ] = MONRTN>>8;
-		image[ i++ ] = MONRTN&0xFF;
+		image[ i++ ] = 0x83; // SWI ; return to monitor
 		
 		if (WORKRAM>=WORKTOP) { // leave some stack space for monitor routines
 			flsprintf(stderr,"Not enough WORKRAM on target");
@@ -414,11 +499,27 @@ int callMonitor(int mon, int ctrlbyt, int accu, int faddr, int laddr) {
 		}
 	
 	// now execute the fragment
-	runFrom(WORKRAM+2, accu, 0x00, faddr); 
+	runFrom(WORKRAM, accu, 0x00, faddr); 
 
-	// fetch the return values 
-	readMemory(WORKRAM , 2, 0);
-	return ((image[ WORKRAM ] & 0xFF) << 8) | (image[ WORKRAM+1 ] & 0xFF); // return condition codes and accu
+        // SWI drops into MON, which will send a BREAK
+	{ 	char buf;
+		if (read(com, &buf, 1) != 1)
+			comErr("ERROR: waiting for MON, nothing was received\n");
+		if(buf != 0)
+			comErr("ERROR: unexpected swi answer read %x\n", buf);
+	}
+
+	SP = readSP();
+	readMemory(SP + 1 , 6 , 0);
+	flsprintf(stdout, "SP=%02x SP+1..6: hi(X)=%02x CC=%02x A=%02x lo(X)=%02x hi(PC)=%02x lo(PC)=%02x\n",
+		SP,
+		image[SP+1],  // hi(X)
+		image[SP+2],  // CC
+		image[SP+3],  // A
+		image[SP+4],  // lo(X)
+		image[SP+5],  // hi(PC)
+		image[SP+6]); // lo(PC)
+	return ((image[SP+2] & 0xff) << 8) | (image[SP+3] & 0xff); // return condition codes and accu
 	}	
 	
 int fastProg(int faddr,int n) {
@@ -717,7 +818,7 @@ void massErase() {
 // NOTE! to override flash security and erase FLBPR must be used as the erase address for mass erase
 	if (verbose) 
 		flsprintf(stdout,"Mass erase\n");
-	callMonitor(ERARRNG , 0x40, 0, EADDR, 0);
+	callMonitor(ERARRNG , ERARRNG_MASS_ERASE, 0, EADDR, 0);
 	}
 	
 void flashProgram(int addr,int size,int verify) {
@@ -867,24 +968,26 @@ int readSrec(int verbose,FILE* sf,unsigned char* image, int size,  int base, int
 void printHelp() {
 		flsprintf(stdout,"bl08 burns MC68HC908 Flash memory from S-record file(s) using Monitor mode\n");
 		flsprintf(stdout,"Usage: \n");
-		flsprintf(stdout," bl08 [-abcdefhiklmnpqrstuvx] [filename...]\n");
+		flsprintf(stdout," bl08 [-abcdefhiklmnpqrstuvwx] [filename...]\n");
 		flsprintf(stdout,"  -a address     Set dump memory address (needs -s option too)\n");
 		flsprintf(stdout,"  -b baudrate    Set baudrate for target communication\n");
+		flsprintf(stdout,"                 baudrate = int value passed to cfsetXspeed() directly, or\n");
+		flsprintf(stdout,"                 baudrate = Bxxx for standard termios.h defined constant\n");
 		flsprintf(stdout,"  -c device      Set serial com device used to communicate with target\n"); 
 		flsprintf(stdout,"                 typically /dev/ttyS0 \n");
 		flsprintf(stdout,"  -d dumpformat  Set dump format, supported formats are: 'srec'\n");
 		flsprintf(stdout,"  -e             Erase target using mass erase mode, clearing security bytes\n");
-		flsprintf(stdout,"  -f             Use fast programming method");		
+		flsprintf(stdout,"  -f             Use fast programming method\n");		
 		flsprintf(stdout,"  -g address     Go execute target code from address or use '-g reset'\n");
 		flsprintf(stdout,"  -h             Print out this help text\n");
-		flsprintf(stdout,"  -i             Read input (S-records) from standard inputi\n");
+		flsprintf(stdout,"  -i             Read input (S-records) from standard input\n");
 		flsprintf(stdout,"  -k             Kill previous instance of bl08\n");
 		flsprintf(stdout,"  -l verbosity   Set verbosity level, valid values are 0-4, default 1\n");
 		flsprintf(stdout,"  -m             Terminal emulator mode\n");
 		flsprintf(stdout,"  -n             Print bl08 version number\n");
 		flsprintf(stdout,"  -o param=value Override target parameter value\n");	
 		flsprintf(stdout,"                 param = ROMBASE,FLASH,PUTBYTE,GETBYTE,RDVRRNG,MONRTN\n");
-		flsprintf(stdout,"                         ERARRNG,PRGRNGE,FLBPR,MONDATA,PAGESIZE,EADDR\n");	
+		flsprintf(stdout,"                         ERARRNG,PRGRNGE,FLBPR,MONDATA,PAGESIZE,EADDR,RAM\n");	
 		flsprintf(stdout,"  -p             Use page erase when programming flash\n");	
 		flsprintf(stdout,"  -q             Run quietly, same as -l 0\n");		
 		flsprintf(stdout,"  -s size        Set dump memory size\n");
@@ -892,12 +995,16 @@ void printHelp() {
 		flsprintf(stdout,"  -t cputype     Set CPU type, valid values are: 'gz16'\n");
 		flsprintf(stdout,"  -u             Upload only (do not program flash)\n");
 		flsprintf(stdout,"  -v             Verify when programming \n");
+		flsprintf(stdout,"  -w pin=value   Set serial port pin state\n");
+		flsprintf(stdout,"                 pin=LE,DTR,RTS,ST,SR,CTS,CAR,CD,RNG,RI,DSR\n");
+		flsprintf(stdout,"                 val=1/0, 1=negative pin voltage\n");
 		flsprintf(stdout,"  -x cpuspeed    Set CPU speed, typically set for Fbus (in MHz) x 4 \n");
 		flsprintf(stdout,"  -z             Do not program, do no upload, just read in the S-rec file \n");
 		flsprintf(stdout," addresses and sizes in decimal, for hex prefix with '0x'\n");
 		// Example
 	exit(0);
 	}
+
 
 
 void termEmu()
@@ -953,7 +1060,7 @@ void termEmu()
 	}
 
 void setCPUtype(char* cpu) {
-	if (strcmp("gz16",cpu)==0) {
+	if (strcmp("gz16",cpu)==0 || strcmp("mc68hc908gz16",cpu)==0) {
 		// These settings depend on the CPU version
 		FLASH=0xC000;
 		PUTBYTE=0xFEAF; 
@@ -964,10 +1071,11 @@ void setCPUtype(char* cpu) {
 		MONRTN=0xFE20;
 		FLBPR=0xFF7E;
 		EADDR=FLBPR;
-		MONDATA = 0x48;
+		RAM = 0x40;
+		MONDATA = RAM + 8;
 		PAGESIZE = 64;
 		}
-	else if (strcmp("jb8",cpu)==0) {
+	else if (strcmp("jb8",cpu)==0 || strcmp("mc68hc908jb8",cpu)==0) {
 		// These settings depend on the CPU version
 		FLASH=0xDC00;
 		PUTBYTE=0xFED6; 
@@ -978,11 +1086,29 @@ void setCPUtype(char* cpu) {
 		MONRTN=0xFE55;
 		FLBPR=0xFE09;
 		EADDR=FLASH;
-		MONDATA = 0x48;
+		RAM = 0x40;
+		MONDATA = RAM + 8;
 		PAGESIZE = 64;
+		}
+	else if (strcmp("qy2",cpu)==0 || strcmp("mc68hlc908qy",cpu)==0) {
+		// These settings depend on the CPU version
+		FLASH=0xF800;
+		PUTBYTE=0xFE9F;  // FIXME?
+		GETBYTE=0x2800;
+		RDVRRNG=0x2803;
+		ERARRNG=0x2806;
+		PRGRNGE=0x2809;
+		MONRTN=0xFE55;   // FIXME?
+		FLBPR=0xFFBE;
+		EADDR=FLASH;     // FIXME?
+		RAM = 0x80;
+		MONDATA = RAM + 8;
+		PAGESIZE = 64;  
 		}
 	else {
 		flsprintf(stderr,"Unsupported CPU type '%s'\n",cpu);
+		flsprintf(stderr,"Supported CPU types are: \n 'mc68hc908gz16' \n 'mc68hc908jb8' \n 'mc68hlc908qy2'\n",cpu);
+		
 		abort();
 		}
 	// these are independent of CPU type	
@@ -1037,6 +1163,7 @@ void parseOverride(char* str) {
 	else if (strcmp("ERARRNG",str)==0) ERARRNG=val;
 	else if (strcmp("PRGRNGE",str)==0) PRGRNGE=val;
 	else if (strcmp("FLBPR",str)==0) FLBPR=val;
+	else if (strcmp("RAM",str)==0) RAM=val;
 	else if (strcmp("MONDATA",str)==0) MONDATA=val;
 	else if (strcmp("PAGESIZE",str)==0) PAGESIZE=val;
 	else if (strcmp("MONRTN",str)==0) MONRTN=val;
@@ -1047,15 +1174,60 @@ void parseOverride(char* str) {
 		}
 	}
 	
+void parseIOControl(char* str) {	
+	char* vp=strstr(str,"=");
+	if (!vp) {
+		flsprintf(stderr,"Bad pin control syntax, no '=' found\n");
+		abort();
+		}
+	*vp=0;
+	vp++;
+	int val=getIntArg(vp);
+	if (val!=0 && val!=1) {
+		flsprintf(stderr,"Bad pin control value %d (not 1/0)\n",val);
+		abort();
+		}
+	
+	int i;
+	for (i=0; i<sizeof(portPins)/sizeof(portPins[0]); i++) {
+		if (strcmp(portPins[i].str,str)==0)  {
+			forcePins[i]=val+1;
+			return;
+			}
+	}
+	
+	flsprintf(stderr,"Attempt to set unrecognized pin %s\n",str);
+	abort();	
+	}
+
+
+void parseBaudrate(char* str) {	
+	if (*str=='B') {
+		int i;
+		for (i=0; i<sizeof(baudrates)/sizeof(baudrates[0]); ++i) {
+			if (strcmp(baudrates[i].str,str)==0) {
+				baudRate=baudrates[i].val;
+				return;
+				}
+			}
+		flsprintf(stderr,"Attempt to set unrecognized baudrate %s\n",optarg);
+		abort();	
+		}
+	if (sscanf(optarg,"%d",&baudRate)!=1) {
+		flsprintf(stderr,"Attempt to set bad baudrate %s\n",optarg);
+		abort();	
+		}
+	}
+	
 void parseArgs(int argc, char *argv[]) {	
 	int c;
-	while ((c = getopt (argc, argv, "a:b:c:d:efg:hikl:mno:pqr:s:t:uvx:z")) != -1) {
+	while ((c = getopt (argc, argv, "a:b:c:d:efg:hikl:mno:pqr:s:t:uvw:x:z")) != -1) {
 		switch (c) {
 			case 'a' :
 				dumpStart=getIntArg(optarg);
 				break;
 			case 'b' : 
-				sscanf(optarg,"%d",&baudRate); 
+				parseBaudrate(optarg);
 				break;
 			case 'c' : 
 				COM=optarg;
@@ -1090,11 +1262,11 @@ void parseArgs(int argc, char *argv[]) {
 			case 'n' :
 				flsprintf(stdout,"%s\n",version);
 				break;
-			case 'p' :
-				pageErase=1;
-				break;
 			case 'o' :
 				parseOverride(optarg);
+				break;
+			case 'p' :
+				pageErase=1;
 				break;
 			case 'q' :
 				verbose=0;
@@ -1113,6 +1285,9 @@ void parseArgs(int argc, char *argv[]) {
 				break;
 			case 'v' :
 				verify=1;
+				break;
+			case 'w' :
+				parseIOControl(optarg);
 				break;
 			case 'x' :
 				sscanf(optarg,"%d",&CPUSPEED); 
@@ -1134,12 +1309,6 @@ void parseArgs(int argc, char *argv[]) {
 		printHelp();
 	}
 
-void ioctlErrCheck(int e) {
-	if (e) {
-		flsprintf(stdout,"ioctl returned %d\n",e);
-		abort();
-		}
-	}
 
 void generateReset() {
 	int s;
@@ -1191,9 +1360,11 @@ int main(int argc, char *argv[]) {
 	// default values
 	setCPUtype("gz16");
 	CPUSPEED=8; 
-	baudRate=14400;
+	//baudRate=14400;
 	
 	parseArgs(argc,argv);
+	
+	
 
 	if (killPrevious)
 		killPreviousInstance();
@@ -1251,7 +1422,7 @@ int main(int argc, char *argv[]) {
 						if (verbose)
 							flsprintf(stdout,"Erase %04X - %04X\n",a,PAGESIZE);
 					
-						callMonitor(ERARRNG , 0, 0, a, 0);
+						callMonitor(ERARRNG, ERARRNG_PAGE_ERASE, 0, a, 0);
 						a += PAGESIZE;
 						}
 					}
