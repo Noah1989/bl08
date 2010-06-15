@@ -992,7 +992,7 @@ void printHelp() {
 		flsprintf(stdout,"  -q             Run quietly, same as -l 0\n");		
 		flsprintf(stdout,"  -s size        Set dump memory size\n");
 		flsprintf(stdout,"  -r pulse       Pulse DTR for pulse milliseconds\n");
-		flsprintf(stdout,"  -t cputype     Set CPU type, valid values are: 'gz16'\n");
+		flsprintf(stdout,"  -t cputype     Set CPU type, valid values are: 'gz16', 'jb8'\n");
 		flsprintf(stdout,"  -u             Upload only (do not program flash)\n");
 		flsprintf(stdout,"  -v             Verify when programming \n");
 		flsprintf(stdout,"  -w pin=value   Set serial port pin state\n");
