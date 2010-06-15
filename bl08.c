@@ -1359,8 +1359,6 @@ int main(int argc, char *argv[]) {
 	
 	// default values
 	setCPUtype("gz16");
-	CPUSPEED=8; 
-	//baudRate=14400;
 	
 	parseArgs(argc,argv);
 	
