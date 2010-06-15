@@ -443,7 +443,7 @@ void dumpMemorySrec(int addr, int size) {
 
 int readSP() {
 	if (verbose>2) 
-		flsprintf(stdout,"Read Stak Pointer\n");
+		flsprintf(stdout,"Read Stack Pointer\n");
 	sendByte(0x0C); // Monitor mode READSP command
 	return  (((getByte() << 8) | (getByte() & 0xFF)) - 1) & 0xFFFF;
 	}	
