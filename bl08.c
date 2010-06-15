@@ -974,7 +974,7 @@ void printHelp() {
 		flsprintf(stdout,"                 baudrate = int value passed to cfsetXspeed() directly, or\n");
 		flsprintf(stdout,"                 baudrate = Bxxx for standard termios.h defined constant\n");
 		flsprintf(stdout,"  -c device      Set serial com device used to communicate with target\n"); 
-		flsprintf(stdout,"                 typically /dev/ttyS0 \n");
+		flsprintf(stdout,"                 (default '/dev/ttyS0')\n");
 		flsprintf(stdout,"  -d dumpformat  Set dump format, supported formats are: 'srec'\n");
 		flsprintf(stdout,"  -e             Erase target using mass erase mode, clearing security bytes\n");
 		flsprintf(stdout,"  -f             Use fast programming method\n");		
