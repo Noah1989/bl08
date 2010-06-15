@@ -236,7 +236,7 @@ void setHandshake() {
 void initSerialPort() {
 	com =  open(COM, O_RDWR | O_NOCTTY | O_NDELAY);
 	if (com <0) 
-		comErr("Failed to open seria port");
+		comErr("Failed to open serial port");
 		
 	fcntl(com, F_SETFL, 0);
 		
