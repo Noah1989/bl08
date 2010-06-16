@@ -396,7 +396,7 @@ void connectTarget() {
 	readMemory(RAM, 1 , 0);
 	connected=1;
 	if ((image[ RAM ] & 0x40) == 0)
-		flsprintf(stdout,"Failed to unlock the security");
+		flsprintf(stdout,"Failed to unlock the security\n");
 	
 	// in case FLBPR is RAM based we clear it first by just writing it
 	image[FLBPR]=0xFF;
@@ -475,7 +475,7 @@ int callMonitor(int mon, int ctrlbyt, int accu, int faddr, int laddr) {
 	writeMemory(MONDATA, 4, 0);
 		
 	if (WORKRAM>0xFF) {
-		flsprintf(stderr,"Work RAM must be on zero page");
+		flsprintf(stderr,"Work RAM must be on zero page\n");
 		abort();
 		}
 
@@ -490,7 +490,7 @@ int callMonitor(int mon, int ctrlbyt, int accu, int faddr, int laddr) {
 		image[ i++ ] = 0x83; // SWI ; return to monitor
 		
 		if (WORKRAM>=WORKTOP) { // leave some stack space for monitor routines
-			flsprintf(stderr,"Not enough WORKRAM on target");
+			flsprintf(stderr,"Not enough WORKRAM on target\n");
 			abort();
 			}
 		
@@ -526,7 +526,7 @@ int fastProg(int faddr,int n) {
 	static int n_addr;
 	static int last_n;
 	if (WORKRAM>0xFF) {
-		flsprintf(stderr,"Work RAM must be on zero page");
+		flsprintf(stderr,"Work RAM must be on zero page\n");
 		abort();
 		}
 
@@ -583,7 +583,7 @@ int fastProg(int faddr,int n) {
 		image[ i++ ] = MONRTN&0xFF;
 		
 		if (WORKRAM>=WORKTOP) { // leave some stack space for monitor routines
-			flsprintf(stderr,"Not enough WORKRAM on target");
+			flsprintf(stderr,"Not enough WORKRAM on target\n");
 			abort();
 			}
 		
@@ -618,7 +618,7 @@ int fastProg(int faddr,int n) {
 	
 int fastProg2(int faddr,int progn) {
 	if (WORKRAM>0xFF) {
-		flsprintf(stderr,"Work RAM must be on zero page");
+		flsprintf(stderr,"Work RAM must be on zero page\n");
 		abort();
 		}
 
@@ -776,7 +776,7 @@ int fastProg2(int faddr,int progn) {
 		image[ i++ ] = MONRTN&0xFF;
 	
 		if (i>=WORKTOP) { // leave some stack space for monitor routines
-			flsprintf(stderr,"Not enough WORKRAM on target");
+			flsprintf(stderr,"Not enough WORKRAM on target\n");
 			abort();
 			}
 		
@@ -1442,7 +1442,7 @@ int main(int argc, char *argv[]) {
 				else 
 					flashProgram(addr , size , verify);
 				if (verbose>1) {
-					flsprintf(stdout,"Reading back memory/flash content");
+					flsprintf(stdout,"Reading back memory/flash content\n");
 					readMemory(addr , size, verbose);
 					flsprintf(stdout,"\n");
 					dumpMemory(addr , size);
