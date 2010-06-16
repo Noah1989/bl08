@@ -511,14 +511,15 @@ int callMonitor(int mon, int ctrlbyt, int accu, int faddr, int laddr) {
 
 	SP = readSP();
 	readMemory(SP + 1 , 6 , 0);
-	flsprintf(stdout, "SP=%02x SP+1..6: hi(X)=%02x CC=%02x A=%02x lo(X)=%02x hi(PC)=%02x lo(PC)=%02x\n",
-		SP,
-		image[SP+1],  // hi(X)
-		image[SP+2],  // CC
-		image[SP+3],  // A
-		image[SP+4],  // lo(X)
-		image[SP+5],  // hi(PC)
-		image[SP+6]); // lo(PC)
+	if (verbose>2) 
+		flsprintf(stdout, "SP=%02x SP+1..6: hi(X)=%02x CC=%02x A=%02x lo(X)=%02x hi(PC)=%02x lo(PC)=%02x\n",
+			SP,
+			image[SP+1],  // hi(X)
+			image[SP+2],  // CC
+			image[SP+3],  // A
+			image[SP+4],  // lo(X)
+			image[SP+5],  // hi(PC)
+			image[SP+6]); // lo(PC)
 	return ((image[SP+2] & 0xff) << 8) | (image[SP+3] & 0xff); // return condition codes and accu
 	}	
 	
