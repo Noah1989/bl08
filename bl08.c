@@ -1312,21 +1312,23 @@ void parseArgs(int argc, char *argv[]) {
 
 
 void generateReset() {
+	struct timespec tspec;
 	int s;
-	ioctlErrCheck(ioctl(com, TIOCMGET, &s)); 
 	
+	ioctlErrCheck(ioctl(com, TIOCMGET, &s)); 
 	s |= TIOCM_DTR;
 	ioctlErrCheck(ioctl(com, TIOCMSET, &s)); 
-	
 		
-	struct timespec tspec;
 	tspec.tv_sec=resetPulse/1000;
 	tspec.tv_nsec=(resetPulse%1000)*1000000; 
 	nanosleep(&tspec,0);
-
 	
 	s &= ~TIOCM_DTR;
 	ioctlErrCheck(ioctl(com, TIOCMSET, &s)); 
+
+	tspec.tv_sec=0;
+	tspec.tv_nsec=1000000; /* wait at least 1 ms */
+	nanosleep(&tspec,0);
 	}
 
 
