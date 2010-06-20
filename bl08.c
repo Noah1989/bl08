@@ -1495,6 +1495,11 @@ int main(int argc, char *argv[]) {
 			if (strcmp("reset",executeCode)==0) {
 				readMemory(0xFFFE,2,0);
 				addr=((image[0xFFFE]&0xFF)<<8) | (image[0xFFFF]&0xFF);
+				/* Unlocked flash reads as 0xAD everywhere */
+				if (addr == 0xADAD) {
+					flsprintf(stdout,"Could not read reset vector, flash security locked?\n");
+					abort();
+					}
 				}
 			else  
 				addr=getIntArg(executeCode);
