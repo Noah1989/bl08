@@ -132,6 +132,7 @@ int com;
 char version[] = "1.0.0.1";
 
 unsigned char image[ 0x10000 ]; // HC908 memory image
+unsigned char scode[8]={0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
 
 // EARRNG, CTRLBYT parameter
 #define ERARRNG_PAGE_ERASE 0x00
@@ -387,16 +388,21 @@ void connectTarget() {
 	int j;
 	if (connected)
 		return;
-	// Hmmm, following does not work, how should we do this
-	// For blank device we need to send FF, but for non blank something else, oth
-	// reprogramming a non blank device, does it make sense
-	for (j = 0; j<8; ++j)  
-		sendByte(0xFF);
+
+	flsprintf(stdout, "Security code: ");
+	for (j = 0; j<8; ++j) {
+		sendByte(scode[j]);
+	        flsprintf(stdout, ".");
+		}
+	flsprintf(stdout, " ");
+
 	flushBreak();
 	readMemory(RAM, 1 , 0);
 	connected=1;
 	if ((image[ RAM ] & 0x40) == 0)
-		flsprintf(stdout,"Failed to unlock the security\n");
+		flsprintf(stdout,"failed\n");
+	else
+		flsprintf(stdout,"passed\n");
 	
 	// in case FLBPR is RAM based we clear it first by just writing it
 	image[FLBPR]=0xFF;
@@ -969,7 +975,7 @@ int readSrec(int verbose,FILE* sf,unsigned char* image, int size,  int base, int
 void printHelp() {
 		flsprintf(stdout,"bl08 burns MC68HC908 Flash memory from S-record file(s) using Monitor mode\n");
 		flsprintf(stdout,"Usage: \n");
-		flsprintf(stdout," bl08 [-aBbcdefhiklmnpqrstuvwx] [filename...]\n");
+		flsprintf(stdout," bl08 [-aBbcdefhiklmnpqrstuvwxy] [filename...]\n");
 		flsprintf(stdout,"  -a address     Set dump memory address (needs -s option too)\n");
 		flsprintf(stdout,"  -B baudrate    Set baud rate for target communication\n");
 		flsprintf(stdout,"  -b speed       Set baud rate using speed_t value as defined in termios.h.\n");
@@ -1003,6 +1009,7 @@ void printHelp() {
 		flsprintf(stdout,"                 pin=LE,DTR,RTS,ST,SR,CTS,CAR,CD,RNG,RI,DSR\n");
 		flsprintf(stdout,"                 val=1/0, 1=negative pin voltage\n");
 		flsprintf(stdout,"  -x cpuspeed    Set CPU speed, typically set for Fbus (in MHz) x 4 \n");
+		flsprintf(stdout,"  -y string      Security code, as a string of hex bytes\n");
 		flsprintf(stdout,"  -z             Do not program, do no upload, just read in the S-rec file \n");
 		flsprintf(stdout," addresses and sizes in decimal, for hex prefix with '0x'\n");
 		// Example
@@ -1223,10 +1230,28 @@ void parseTermSpeed(char* str) {
 		abort();	
 		}
 	}
+
+void setSecurityCode(char* str) {
+	int i;
+	int consumed;
+	for (i=0; i<8 && *str; ++i) {
+		if (sscanf(str," %2hhx%n",&scode[i],&consumed)!=1) {
+			flsprintf(stderr,"Bad security code: %s\n",str);
+			abort();
+			}
+		str += consumed;
+		while (*str==' ') str++; /* tolerate spaces */
+		if (*str==':') str++;    /* and one colon */
+		}
+	if (i<8) {
+		flsprintf(stderr,"Found only %d bytes in security code\n",i);
+		abort();
+		}
+	}
 	
 void parseArgs(int argc, char *argv[]) {	
 	int c;
-	while ((c = getopt (argc, argv, "a:B:b:c:d:efg:hikl:mno:pqr:s:t:uvw:x:z")) != -1) {
+	while ((c = getopt (argc, argv, "a:B:b:c:d:efg:hikl:mno:pqr:s:t:uvw:x:y:z")) != -1) {
 		switch (c) {
 			case 'a' :
 				dumpStart=getIntArg(optarg);
@@ -1299,6 +1324,9 @@ void parseArgs(int argc, char *argv[]) {
 				break;
 			case 'x' :
 				sscanf(optarg,"%d",&CPUSPEED); 
+				break;
+			case 'y' :
+				setSecurityCode(optarg);
 				break;
 			case 'z' :
 				loadOnly=1; 
