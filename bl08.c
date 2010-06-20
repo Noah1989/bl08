@@ -95,34 +95,34 @@ int forcePins[sizeof(portPins)/sizeof(portPins[0])] = {0};
 pair baudrates[]= {
 // Some common, but non POSIX baudrates here
 #ifdef B14400
-{"B14400",B14400},
+{"14400",B14400},
 #endif
 #ifdef B57600
-{"B57600",B57600},
+{"57600",B57600},
 #endif
 #ifdef B115200
-{"B115200",B115200},
+{"115200",B115200},
 #endif
 #ifdef B230400
-{"B230400",B230400},
+{"230400",B230400},
 #endif
 
-{"B0",B0},
-{"B50",B50},
-{"B75",B75},
-{"B110",B110},
-{"B134",B134},
-{"B150",B150},
-{"B200",B200},
-{"B300",B300},
-{"B600",B600},
-{"B1200",B1200},
-{"B1800",B1800},
-{"B2400",B2400},
-{"B4800",B4800},
-{"B9600",B9600},
-{"B19200",B19200},
-{"B38400",B38400},
+{"0",B0},
+{"50",B50},
+{"75",B75},
+{"110",B110},
+{"134",B134},
+{"150",B150},
+{"200",B200},
+{"300",B300},
+{"600",B600},
+{"1200",B1200},
+{"1800",B1800},
+{"2400",B2400},
+{"4800",B4800},
+{"9600",B9600},
+{"19200",B19200},
+{"38400",B38400},
 };
 	
 int baudRate=B9600;
@@ -969,11 +969,14 @@ int readSrec(int verbose,FILE* sf,unsigned char* image, int size,  int base, int
 void printHelp() {
 		flsprintf(stdout,"bl08 burns MC68HC908 Flash memory from S-record file(s) using Monitor mode\n");
 		flsprintf(stdout,"Usage: \n");
-		flsprintf(stdout," bl08 [-abcdefhiklmnpqrstuvwx] [filename...]\n");
+		flsprintf(stdout," bl08 [-aBbcdefhiklmnpqrstuvwx] [filename...]\n");
 		flsprintf(stdout,"  -a address     Set dump memory address (needs -s option too)\n");
-		flsprintf(stdout,"  -b baudrate    Set baudrate for target communication\n");
-		flsprintf(stdout,"                 baudrate = int value passed to cfsetXspeed() directly, or\n");
-		flsprintf(stdout,"                 baudrate = Bxxx for standard termios.h defined constant\n");
+		flsprintf(stdout,"  -B baudrate    Set baud rate for target communication\n");
+		flsprintf(stdout,"  -b speed       Set baud rate using speed_t value as defined in termios.h.\n");
+		flsprintf(stdout,"                 The value is passed directly to cfsetXspeed() and can be\n");
+		flsprintf(stdout,"                 used to set non-Posix baud rates. On MacOSX the value is\n");
+		flsprintf(stdout,"                 equivalent to actual baud rate, whereas on Linux it is\n");
+		flsprintf(stdout,"                 very different. If in doubt, use the -B option instead.\n");
 		flsprintf(stdout,"  -c device      Set serial com device used to communicate with target\n"); 
 		flsprintf(stdout,"                 (default '/dev/ttyS0')\n");
 		flsprintf(stdout,"  -d dumpformat  Set dump format, supported formats are: 'srec'\n");
@@ -1203,32 +1206,36 @@ void parseIOControl(char* str) {
 
 
 void parseBaudrate(char* str) {	
-	if (*str=='B') {
-		int i;
-		for (i=0; i<sizeof(baudrates)/sizeof(baudrates[0]); ++i) {
-			if (strcmp(baudrates[i].str,str)==0) {
-				baudRate=baudrates[i].val;
-				return;
-				}
+	int i;
+	for (i=0; i<sizeof(baudrates)/sizeof(baudrates[0]); ++i) {
+		if (strcmp(baudrates[i].str,str)==0) {
+			baudRate=baudrates[i].val;
+			return;
 			}
-		flsprintf(stderr,"Attempt to set unrecognized baudrate %s\n",optarg);
-		abort();	
 		}
-	if (sscanf(optarg,"%d",&baudRate)!=1) {
-		flsprintf(stderr,"Attempt to set bad baudrate %s\n",optarg);
+	flsprintf(stderr,"Attempt to set unrecognized baud rate %s\n",str);
+	abort();	
+	}
+
+void parseTermSpeed(char* str) {	
+	if (sscanf(str,"%d",&baudRate)!=1) {
+		flsprintf(stderr,"Failed to set terminal speed %s\n",str);
 		abort();	
 		}
 	}
 	
 void parseArgs(int argc, char *argv[]) {	
 	int c;
-	while ((c = getopt (argc, argv, "a:b:c:d:efg:hikl:mno:pqr:s:t:uvw:x:z")) != -1) {
+	while ((c = getopt (argc, argv, "a:B:b:c:d:efg:hikl:mno:pqr:s:t:uvw:x:z")) != -1) {
 		switch (c) {
 			case 'a' :
 				dumpStart=getIntArg(optarg);
 				break;
-			case 'b' : 
+			case 'B' : 
 				parseBaudrate(optarg);
+				break;
+			case 'b' : 
+				parseTermSpeed(optarg);
 				break;
 			case 'c' : 
 				COM=optarg;
