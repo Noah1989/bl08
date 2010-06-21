@@ -806,7 +806,7 @@ int fastProg2(int faddr,int progn) {
 			//flsprintf(stderr,"%d %02X\n",i,b);
 			sum = (sum+b)&0xFF;
 			if (b != image[faddr+i])
-				flsprintf(stderr,"Program data transfer error, at %04X sent %02X got %02\n",faddr+i,image[faddr+i],b);
+				flsprintf(stderr,"Program data transfer error, at %04X sent %02X got %02X\n",faddr+i,image[faddr+i],b);
 			}
 		int back=getByte();
 			//flsprintf(stderr,"%02X\n",back);
@@ -860,7 +860,7 @@ void flashProgram(int addr,int size,int verify) {
 					sum = (sum + image[addr+i]) & 0xFF;
 				int back= cca & 0xFF; // get Accu from target
 				if (sum != back) {
-					flsprintf(stderr,"Program checksum failure, at %04X size %04X checksum calculated %02X received %02\n",addr,n,sum,back);
+					flsprintf(stderr,"Program checksum failure, at %04X size %04X checksum calculated %02X received %02X\n",addr,n,sum,back);
 					abort();
 					}
 					
@@ -1118,8 +1118,7 @@ void setCPUtype(char* cpu) {
 		}
 	else {
 		flsprintf(stderr,"Unsupported CPU type '%s'\n",cpu);
-		flsprintf(stderr,"Supported CPU types are: \n 'mc68hc908gz16' \n 'mc68hc908jb8' \n 'mc68hlc908qy2'\n",cpu);
-		
+		flsprintf(stderr,"Supported CPU types are: \n 'mc68hc908gz16' \n 'mc68hc908jb8' \n 'mc68hlc908qy2'\n");
 		abort();
 		}
 	// these are independent of CPU type	
