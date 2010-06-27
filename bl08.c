@@ -237,7 +237,7 @@ void setHandshake() {
 void initSerialPort() {
 	com =  open(COM, O_RDWR | O_NOCTTY | O_NDELAY);
 	if (com <0) 
-		comErr("Failed to open serial port");
+		comErr("Failed to open serial port\n");
 		
 	fcntl(com, F_SETFL, 0);
 		
@@ -277,7 +277,7 @@ void initSerialPort() {
 		char buf = -2;
 		while (read(com, &buf, 1)>0) {
 			if (verbose)
-				printf("Unexpected data from serial port: %02X\n",buf & 0xFF);
+				flsprintf(stderr,"Unexpected data from serial port: %02X\n",buf & 0xFF);
 			}
 		}
 
@@ -810,9 +810,10 @@ int fastProg2(int faddr,int progn) {
 			}
 		int back=getByte();
 			//flsprintf(stderr,"%02X\n",back);
-		if (back != sum) 
+		if (back != sum) {
 			flsprintf(stderr,"Program checksum failure, at %04X size %04X checksum calculated %02X received %02X\n",faddr,n,sum,back);
-				
+			abort();
+			}
 		progn -= n;
 		faddr += n;
 		if (verbose)
@@ -1332,11 +1333,11 @@ void parseArgs(int argc, char *argv[]) {
 				break;
 			case '?' :
 				if (isprint (optopt))
-					fprintf (stderr, "Unknown option `-%c'.\n", optopt);
+					flsprintf(stderr,"Unknown option `-%c'.\n", optopt);
 				else
-					fprintf (stderr,"Unknown option character `\\x%x'.\n",optopt);
+					flsprintf(stderr,"Unknown option character `\\x%x'.\n",optopt);
 			  default:
-				fprintf (stderr,"Bug, unhandled option '%c'\n",c);
+				flsprintf(stderr,"Bug, unhandled option '%c'\n",c);
 				abort ();
 			}
 		}
@@ -1369,7 +1370,7 @@ void generateReset() {
 void deletePidFile() {
 	int stat=remove(PIDFILENAME);
 	if (stat)
-		printf("remove returned %d\n",stat);
+		flsprintf(stderr,"remove returned %d\n",stat);
 	}
 	
 void killPreviousInstance() {
@@ -1380,12 +1381,12 @@ void killPreviousInstance() {
 		fscanf(pidf,"%d",&pid);
 		int stat=kill(pid,SIGKILL);
 		if (stat!=0)
-			printf("kill returned %d\n",stat);
+			flsprintf(stderr,"kill returned %d\n",stat);
 			
 		fclose(pidf);
 		waitpid(pid,&stat,0);
 		if (WIFEXITED(stat)==0)
-			printf("waitpid returned %d\n",WIFEXITED(stat));
+			flsprintf(stderr,"waitpid returned %d\n",WIFEXITED(stat));
 		}
 	pidf=fopen(PIDFILENAME,"w");
 	fprintf(pidf,"%d\n",getpid());
