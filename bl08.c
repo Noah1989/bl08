@@ -5,8 +5,7 @@ Version: 1.0.0.1
 
 Copyright (c) 2004,2008  Kustaa Nyholm
 Copyright (c) 2008 Robert Larice (SWI return to MON, QY2 chip)
-
-(update site about: forcing DTR,RTS, new cpu type, rombase, change tty default to match doc baudrate issue
+Copyright (c) 2010 Tormod Volden
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public
@@ -165,11 +164,6 @@ int LADDR;  // Address of flashing routine last address variable (==MONDATA+2)
 // 0x48 - 0x4B ROM routine parameters
 // 0x4C - 0x6C ROM routine data buffer (64 bytes as used in this code)
 // 0xAC - 0xFF Working storage for calling the ROM routines (about 17 bytes used)
-
-
-// Cavets
-// DATABUF size
-// security erase at FLBPR, power cycle
 
 int tickP1=15;
 int tickP2=1023;
