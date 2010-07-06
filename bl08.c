@@ -137,27 +137,27 @@ unsigned char scode[8]={0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
 #define ERARRNG_PAGE_ERASE 0x00
 #define ERARRNG_MASS_ERASE 0x40
 
-// give some initial meaningfull values (based on MC68HC908GZ16)
-int FLASH=0xE000; // Flash start address
-int PUTBYTE=0xFEAF; // Receive byte routine address
-int GETBYTE=0x1C00; // Receive byte routine address
-int RDVRRNG=0x1C03; // Read/verify flash routine address
-int ERARRNG=0x1C06; // Erase flash routine address
-int PRGRNGE=0x1C09; // Flash programming routine address
-int FLBPR=0xFF7E;	// Flash block proctection register address
-int CPUSPEED=8; // 2 x Fbus freq, e.g.  ext osc 16 MHz -> Fbus == 4 Mh => CPUSPEED==2
-int RAM=0x40;
-int MONDATA=0x48; // FIXME =RAM+8; // Flashing routines parameter block address
-int MONRTN = 0xFE20; // Monitor mode return jump address
-int EADDR = 0xFF7E; // For FLBPR in Flash the mass erase must use FLBPR as the erase address
-// these are calculated
-int DATABUF; // Flashing routines data buffer address (==MONDATA+4)
-int PAGESIZE; // Databuffer size
-int WORKRAM; // Work storage needed for calling flashing routines
-int WORKTOP; // Topmost work storage address
-int CTRLBYT; // Address of flashing routine control variable (==MONDATA+0)
-int CPUSPD; // Address of flashing routine cpu speed variable (==MONDATA+1)
-int LADDR;  // Address of flashing routine last address variable (==MONDATA+2)
+// These will be initialized by setCPUtype()
+int CPUSPEED;	// 2 x Fbus freq, e.g.  ext osc 16 MHz -> Fbus == 4 Mh => CPUSPEED==2
+int RAM;
+int FLASH;	// Flash start address
+int PUTBYTE;	// Receive byte routine address
+int GETBYTE;	// Receive byte routine address
+int RDVRRNG;	// Read/verify flash routine address
+int ERARRNG;	// Erase flash routine address
+int PRGRNGE;	// Flash programming routine address
+int FLBPR;	// Flash block proctection register address
+int MONRTN;	// Monitor mode return jump address
+int EADDR;	// For FLBPR in Flash the mass erase must use FLBPR as the erase address
+// These will be calculated
+int MONDATA;	// Flashing routines parameter block address (==RAM+8)
+int CTRLBYT;	// Address of flashing routine control variable (==MONDATA+0)
+int CPUSPD;	// Address of flashing routine cpu speed variable (==MONDATA+1)
+int LADDR;	// Address of flashing routine last address variable (==MONDATA+2)
+int DATABUF;	// Flashing routines data buffer address (==MONDATA+4)
+int PAGESIZE;	// Databuffer size
+int WORKRAM;	// Work storage needed for calling flashing routines
+int WORKTOP;	// Topmost work storage address
 
 // HC908GZ16 Memory usage (note for some HC908 variants the ROM routines use memory starting from 0x80):
 // 0x40 - 0x47 reserved for future ROM routine expansion needs
@@ -1068,6 +1068,7 @@ void termEmu()
 void setCPUtype(char* cpu) {
 	if (strcmp("gz16",cpu)==0 || strcmp("mc68hc908gz16",cpu)==0) {
 		// These settings depend on the CPU version
+		CPUSPEED=8;
 		FLASH=0xC000;
 		PUTBYTE=0xFEAF; 
 		GETBYTE=0x1C00;
@@ -1078,11 +1079,10 @@ void setCPUtype(char* cpu) {
 		FLBPR=0xFF7E;
 		EADDR=FLBPR;
 		RAM = 0x40;
-		MONDATA = RAM + 8;
-		PAGESIZE = 64;
 		}
 	else if (strcmp("jb8",cpu)==0 || strcmp("mc68hc908jb8",cpu)==0) {
 		// These settings depend on the CPU version
+		CPUSPEED=12; // typically run at 6 MHz, bus freq 3 Mhz
 		FLASH=0xDC00;
 		PUTBYTE=0xFED6; 
 		GETBYTE=0xFC00;
@@ -1093,8 +1093,6 @@ void setCPUtype(char* cpu) {
 		FLBPR=0xFE09;
 		EADDR=FLASH;
 		RAM = 0x40;
-		MONDATA = RAM + 8;
-		PAGESIZE = 64;
 		}
 	else if (strcmp("qy2",cpu)==0 || strcmp("mc68hlc908qy",cpu)==0) {
 		// These settings depend on the CPU version
@@ -1108,21 +1106,24 @@ void setCPUtype(char* cpu) {
 		FLBPR=0xFFBE;
 		EADDR=FLASH;     // FIXME?
 		RAM = 0x80;
-		MONDATA = RAM + 8;
-		PAGESIZE = 64;  
 		}
 	else {
 		flsprintf(stderr,"Unsupported CPU type '%s'\n",cpu);
-		flsprintf(stderr,"Supported CPU types are: \n 'mc68hc908gz16' \n 'mc68hc908jb8' \n 'mc68hlc908qy2'\n");
+		flsprintf(stderr,"The supported CPU types are:\n");
+		flsprintf(stderr,"\tmc68hc908gz16 (gz16)\n");
+		flsprintf(stderr,"\tmc68hc908jb8 (jb8)\n");
+		flsprintf(stderr,"\tmc68hlc908qy2 (qy2)\n");
 		abort();
 		}
-	// these are independent of CPU type	
+	// These are independent of CPU type
+	PAGESIZE = 64;
+	MONDATA = RAM+8;
+	CTRLBYT  =  MONDATA+0;
+	CPUSPD  =  MONDATA+1;
+	LADDR  =  MONDATA+2;
 	DATABUF  =  MONDATA+4;
 	WORKRAM = DATABUF + PAGESIZE;
 	WORKTOP = 0xF0; // this leaves 16 bytes for stack, the deepest ROM routines use 11 so there some for myself too
-	CTRLBYT  =  MONDATA+0; 
-	CPUSPD  =  MONDATA+1;
-	LADDR  =  MONDATA+2;
 	if (DATABUF+PAGESIZE>0xFF) {
 		flsprintf(stderr,"bl08 limitation, DATABUF+PAGESIZE>0xFF, DATABUF=%04X, PAGESIZE=%04X\n",DATABUF,PAGESIZE);
 		abort();
