@@ -566,7 +566,7 @@ int fastProg(int faddr,int n) {
 		image[ i++ ] = 0x25; // BLO *-10
 		image[ i++ ] = (-9)&0xFF;
 		
-		image[ i++ ] = 0x55;
+		image[ i++ ] = 0x55; // LDHX WORKRAM (dir)
 		image[ i++ ] = WORKRAM;
 		
 		image[ i++ ] = 0xCD; // JSR PRGRNGE ; calls the monitor routine
