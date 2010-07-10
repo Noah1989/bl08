@@ -826,7 +826,7 @@ void massErase() {
 void flashProgram(int addr,int size,int verify) {
 	if (addr < FLASH) {
 		flsprintf(stdout,"Programming address %04X below flash start address %04X\n",addr,FLASH);
-		exit(0);
+		abort();
 		}
 	
 	if (useFastProg) {
