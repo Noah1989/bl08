@@ -356,6 +356,11 @@ void readMemory(int addr, int n,int tick) {
 	}
 
 void writeMemory(int addr, int n, int tick) {
+
+	struct timespec tspec;
+	tspec.tv_sec=0;
+	tspec.tv_nsec=1000000; /* wait at least 1 ms (datasheet specifies 11 bit times) */
+
 	if (verbose>2) 
 		flsprintf(stdout,"Write memory address %04X size %04X\n",addr,n);
 	unsigned char* p = &image[ addr ];
@@ -363,10 +368,16 @@ void writeMemory(int addr, int n, int tick) {
 	sendByte(addr >> 8);
 	sendByte(addr & 0xFF);
 	sendByte(*(p++));
+	if (verbose>3)
+		flsprintf(stdout,"Command delay\n");
+	nanosleep(&tspec,0);
 	int tc=1;
 	while (n>1) {
 		sendByte(0x19); // Monitor mode IWRITE command
 		sendByte(*(p++));
+		if (verbose>3)
+			flsprintf(stdout,"Command delay\n");
+		nanosleep(&tspec,0);
 		n -= 1;
 		if (tick) {
 			tc++;
@@ -376,6 +387,8 @@ void writeMemory(int addr, int n, int tick) {
 			//	flsprintf(stdout,"\n");
 			}
 		}
+
+
 	}
 	
 void connectTarget() {
@@ -460,6 +473,10 @@ int runFrom(int PC, int A, int CC, int HX) {
 	image[ SP + 6 ] = PC & 0xFF;
 	writeMemory(SP + 1 , 6 , 0);
 	sendByte(0x28); // Monitor mode RUN command
+	//struct timespec tspec;
+	//tspec.tv_sec=0;
+	//tspec.tv_nsec=5000000; /* wait at least 1 ms (datasheet specifies 11 bit times) */
+	//nanosleep(&tspec,0);
 	return SP;
 	}	
 			
@@ -470,6 +487,8 @@ int callMonitor(int mon, int ctrlbyt, int accu, int faddr, int laddr) {
 
 	image[ CTRLBYT ] = ctrlbyt; // CTRLBYT BIT 6  =  1  = > mass erase
 	image[ CPUSPD ] = CPUSPEED; // CPUSPD  =  16 MHz ext clock  = > 4 MHz Fbus speed  = > 8
+	if (verbose>3)
+		flsprintf(stdout,"CPUSPEED=%02X\n",CPUSPEED);
 	image[ LADDR ] = laddr>>8;
 	image[ LADDR+1 ] = laddr&0xFF;
 	writeMemory(MONDATA, 4, 0);
@@ -505,9 +524,20 @@ int callMonitor(int mon, int ctrlbyt, int accu, int faddr, int laddr) {
 	{ 	char buf;
 		if (read(com, &buf, 1) != 1)
 			comErr("ERROR: waiting for MON, nothing was received\n");
+		if (verbose>3)
+			flsprintf(stdout,"MON returned %02X\n", buf);
 		if(buf != 0)
 			comErr("ERROR: unexpected swi answer read %x\n", buf);
 	}
+
+        // BREAK seems to introduce a frame error on the FT230X, read once more to clear that
+	{ 	char buf;
+		if (read(com, &buf, 1) != 1)
+			comErr("ERROR: waiting for MON, nothing was received\n");
+		if (verbose>3)
+			flsprintf(stdout,"MON returned %02X\n", buf);
+	}
+
 
 	SP = readSP();
 	readMemory(SP + 1 , 6 , 0);
@@ -1096,6 +1126,7 @@ void setCPUtype(char* cpu) {
 		}
 	else if (strcmp("qy2",cpu)==0 || strcmp("mc68hlc908qy",cpu)==0) {
 		// These settings depend on the CPU version
+		//CPUSPEED=12;
 		FLASH=0xF800;
 		PUTBYTE=0xFE9F;  // FIXME?
 		GETBYTE=0x2800;
